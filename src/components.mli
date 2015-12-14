@@ -53,7 +53,21 @@ module Make (G: G) : sig
   (** [scc_list g] computes the strongly connected components of [g].
       The result is a partition of the set of the vertices of [g].
       The [n]-th components is [(scc_array g).(n-1)]. *)
+end
 
+(** Minimal graph signature required by {!MakeIter}.
+    Sub-signature of {!Sig.G} and {!G}. *)
+module type G_ITER = sig
+  type t
+  module V : Sig.COMPARABLE
+  val iter_succ : (V.t -> unit) -> t -> V.t -> unit
+end
+
+module MakeIter(G: G_ITER) : sig
+
+  val scc : G.t -> G.V.t Sig.sequence -> G.V.t list Sig.sequence
+  (** [scc g v] iterates on every component reachable from vertices
+      in [v]. *)
 end
 
 (** Connected components (for undirected graphs).

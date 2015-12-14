@@ -368,6 +368,9 @@ module type IM = sig
   module Mark : MARK with type graph = t and type vertex = vertex
 end
 
+(** Iterator *)
+type 'a sequence = ('a -> unit) -> unit
+
 (*
 Local Variables:
 compile-command: "make -C .."

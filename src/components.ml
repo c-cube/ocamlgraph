@@ -22,8 +22,15 @@ module type G = sig
   val iter_succ : (V.t -> unit) -> t -> V.t -> unit
 end
 
-module Make(G: G) = struct
+(** Minimal graph signature required by {!MakeIter}.
+    Sub-signature of {!Sig.G} and {!G}. *)
+module type G_ITER = sig
+  type t
+  module V : Sig.COMPARABLE
+  val iter_succ : (V.t -> unit) -> t -> V.t -> unit
+end
 
+module MakeIter(G: G_ITER) = struct
   module H = Hashtbl.Make(G.V)
 
   (* iterative code using a stack (variable [cont] below) *)
@@ -33,17 +40,18 @@ module Make(G: G) = struct
     | Visit of G.V.t * G.V.t
     | Test of G.V.t * G.V.t
 
-  let scc g =
+  (* returns the SCC table and number of components *)
+  let scc_inner g v yield =
     let root = H.create 997 in
     let hashcomp = H.create 997 in
     let stack = ref [] in
     let numdfs = ref 0 in
     let numcomp = ref 0 in
-    let rec pop x = function
+    let rec pop acc x = function
       | (y, w) :: l when y > x ->
         H.add hashcomp w !numcomp;
-        pop x l
-      | l -> l
+        pop (w::acc) x l
+      | l -> acc, l
     in
     let cont = ref [] in
     let visit v =
@@ -65,8 +73,10 @@ module Make(G: G) = struct
           | Finish (v, n) ->
             if H.find root v = n then begin
               H.add hashcomp v !numcomp;
-              let s = pop n !stack in
+              (* remove the strongly connected component from the stack *)
+              let comp, s = pop [] n !stack in
               stack:= s;
+              yield comp;
               incr numcomp
             end else
               stack := (n, v) :: !stack;
@@ -81,18 +91,29 @@ module Make(G: G) = struct
       visit v;
       finish ()
     in
-    G.iter_vertex visit_and_finish g;
+    v visit_and_finish;
     !numcomp, (fun v -> H.find hashcomp v)
 
-  let scc_array g =
-    let n,f = scc g in
-    let t = Array.make n [] in
-    G.iter_vertex (fun v -> let i = f v in t.(i) <- v :: t.(i)) g;
-    t
+  let scc g v yield =
+    ignore (scc_inner g v yield)
+end
+
+
+module Make(G: G) = struct
+  include MakeIter(G)
+
+  let scc g =
+    let vertices yield = G.iter_vertex yield g in
+    scc_inner g vertices (fun _ -> ())
 
   let scc_list g =
-    let a = scc_array g in
-    Array.fold_right (fun l acc -> l :: acc) a []
+    let l = ref [] in
+    let vertices yield = G.iter_vertex yield g in
+    ignore (scc_inner g vertices (fun comp -> l := comp :: !l));
+    !l
+
+  let scc_array g =
+    Array.of_list (scc_list g)
 
 end
 
